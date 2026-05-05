@@ -2,9 +2,8 @@ import { useKMarketProducts } from '../features/products/hooks/useKMarketProduct
 import { ProductsList } from '../features/products/components/ProductsList';
 
 // pages/ — thin orchestrator. Calls hooks, composes components.
-// No direct API calls here — that belongs in src/hooks/.
 export const ProductsPage = () => {
-  const { data: products = [], isLoading, error } = useKMarketProducts();
+  const { data: products = [], isLoading, error } = useKMarketProducts('beef');
 
   return (
     <ProductsList

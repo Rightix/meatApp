@@ -20,7 +20,11 @@ export interface StoreAdapter {
   // Уникальный ID магазина — ключ кеша в TanStack Query.
   // Два магазина с одинаковым storeId делили бы один кеш, что было бы багом.
   storeId: string;
-  fetchProducts: () => Promise<Product[]>;
+  // category — строковый slug, каждый адаптер сам решает как его использовать:
+  // мок читает нужный JSON-файл, реальный API подставляет в URL.
+  fetchProducts: (category: string) => Promise<Product[]>;
+  // Поиск одного товара по ID — адаптер знает где искать (файл или API-эндпоинт).
+  fetchProductById: (id: string) => Promise<Product>;
 }
 
 // ─── K-Market DTOs ────────────────────────────────────────────────────────────

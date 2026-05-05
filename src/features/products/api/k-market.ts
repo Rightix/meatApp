@@ -1,13 +1,29 @@
-import { KMarketResultItem, KMarketSearchResponse, Product, StoreAdapter } from '../types';
+import type { KMarketResultItem, KMarketSearchResponse, Product, StoreAdapter } from '../types';
 
-// Относительный путь → в dev Vite проксирует на k-ruoka.fi (см. vite.config.ts).
-// В production нужен свой backend-прокси или serverless function.
-const K_MARKET_URL =
-  '/kr-api/v2/product-search/?offset=0&language=en' +
-  '&categoryPath=liha-ja-kasviproteiinit%2Fnauta%2Fpaistit-fileet-ja-pihvit' +
-  '&storeId=N106&limit=10';
+import beefRaw    from '@/mocked-data/beef.json';
+import groundRaw  from '@/mocked-data/ground.json';
+import porkRaw    from '@/mocked-data/porkj.json';
+import proteinRaw from '@/mocked-data/protein.json';
 
-const mapKMarketDtoToProduct = (item: KMarketResultItem): Product => {
+// ─── Категории ────────────────────────────────────────────────────────────────
+// Строковый union гарантирует автодополнение и ошибку компилятора при опечатке.
+export type KMarketCategory = 'beef' | 'ground' | 'pork' | 'protein';
+
+export const K_MARKET_CATEGORIES: KMarketCategory[] = ['beef', 'ground', 'pork', 'protein'];
+
+// ─── Данные ───────────────────────────────────────────────────────────────────
+// Статический импорт JSON — Vite встраивает данные в бандл.
+// Структура файлов идентична ответу K-Market API.
+// Когда придёт время: заменить на fetch-вызовы, остальной код менять не нужно.
+const CATEGORY_DATA: Record<KMarketCategory, KMarketSearchResponse> = {
+  beef:    beefRaw    as KMarketSearchResponse,
+  ground:  groundRaw  as KMarketSearchResponse,
+  pork:    porkRaw    as KMarketSearchResponse,
+  protein: proteinRaw as KMarketSearchResponse,
+};
+
+// ─── Маппер ───────────────────────────────────────────────────────────────────
+export const mapKMarketDtoToProduct = (item: KMarketResultItem): Product => {
   const { product } = item;
 
   const imageUrl =
@@ -27,21 +43,44 @@ const mapKMarketDtoToProduct = (item: KMarketResultItem): Product => {
   };
 };
 
-const fetchProducts = async (): Promise<Product[]> => {
-  const response = await fetch(K_MARKET_URL);
+// ─── Имитация задержки сети ───────────────────────────────────────────────────
+// Убрать sleep() при переходе на реальный fetch — TanStack Query корректно
+// покажет состояния loading/success/error независимо от задержки.
+const NETWORK_DELAY_MS = 600;
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
-  if (!response.ok) {
-    throw new Error(`K-Market API error: ${response.status} ${response.statusText}`);
+// ─── Реализация методов адаптера ──────────────────────────────────────────────
+const fetchProducts = async (category: string): Promise<Product[]> => {
+  await sleep(NETWORK_DELAY_MS);
+
+  const data = CATEGORY_DATA[category as KMarketCategory];
+  if (!data) {
+    throw new Error(
+      `K-Market: unknown category "${category}". Available: ${K_MARKET_CATEGORIES.join(', ')}`
+    );
   }
-  
-  const data = await response.json() as KMarketSearchResponse;
 
-  return data.result.map(mapKMarketDtoToProduct);
+  // Явное приведение: статический анализ JSON-импорта может вернуть более широкий тип.
+  const items = data.result as KMarketResultItem[];
+  return items.map(mapKMarketDtoToProduct);
 };
 
+const fetchProductById = async (id: string): Promise<Product> => {
+  await sleep(NETWORK_DELAY_MS);
+
+  for (const data of Object.values(CATEGORY_DATA)) {
+    const items = data.result as KMarketResultItem[];
+    const item = items.find(r => r.id === id);
+    if (item) return mapKMarketDtoToProduct(item);
+  }
+
+  throw new Error(`K-Market: product with id "${id}" not found`);
+};
+
+// ─── Адаптер ──────────────────────────────────────────────────────────────────
 export const kMarketAdapter: StoreAdapter = {
   storeId: 'k-market',
   fetchProducts,
+  fetchProductById,
 };
-
 
